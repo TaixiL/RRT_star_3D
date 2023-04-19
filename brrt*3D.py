@@ -145,7 +145,6 @@ class BRRTStar:
             node = nodeList[startIndex]
             path.append([node.x, node.y, node.z])
             startIndex = node.parentIndex
-        print(goalIndex)
         while nodeList_goal[goalIndex].parentIndex is not None:
             node = nodeList[goalIndex]
             path.append([node.x, node.y, node.z])
