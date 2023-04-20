@@ -31,9 +31,10 @@ class Node:
         self.parentIndex = None
         self.isLeaf = True
         self.cost = 0.0
+        self.dis_to_start = 0.0
 
 
-class RRTStar:
+class IBRRTStar:
     def __init__(self, start, goal, obstacles, stepSize=5.0, iteration=500, goalRadius=10):
         """ RRT* initiation
         :param start: start position
@@ -48,6 +49,7 @@ class RRTStar:
         self.maxIteration = iteration
         self.obstacles = obstacles
         self.nodeList = {}
+        self.nodeList_goal = {}
         self.goalRadius = goalRadius
 
     def get_random_point(self):
@@ -55,11 +57,11 @@ class RRTStar:
             return [random.uniform(-X_LIMIT, X_LIMIT), random.uniform(-Y_LIMIT, Y_LIMIT), random.uniform(-Z_LIMIT, Z_LIMIT)]
         return [self.goal.x, self.goal.y, self.goal.z]
 
-    def dist_to_goal(self, x, y, z):
-        return np.linalg.norm([x - self.goal.x, y - self.goal.y, z - self.goal.z])
+    def dist_to_goal(self, x, y, z, x_goal, y_goal, z_goal):
+        return np.linalg.norm([x - x_goal, y - y_goal, z - z_goal])
 
-    def find_near_nodes(self, newNode, r=8):
-        dList = [(key, (node.x - newNode.x) ** 2 + (node.y - newNode.y) ** 2 + (node.z - newNode.z) ** 2) for key, node in self.nodeList.items()]
+    def find_near_nodes(self, newNode,nodeList, r=8):
+        dList = [(key, (node.x - newNode.x) ** 2 + (node.y - newNode.y) ** 2 + (node.z - newNode.z) ** 2) for key, node in nodeList.items()]
         nearNodesIndexes = [key for key, distance in dList if distance <= r ** 2]
         return nearNodesIndexes
 
@@ -90,22 +92,60 @@ class RRTStar:
                 return True
         return False
 
-    def choose_parent(self, newNode, nearNodesIndexes):
-        if len(nearNodesIndexes) == 0:
-            return newNode
-        distanceList = []
-        for i in nearNodesIndexes:
-            dx = newNode.x - self.nodeList[i].x
-            dy = newNode.y - self.nodeList[i].y
-            dz = newNode.z - self.nodeList[i].z
+    def rewire(self, newNode, nearNodeIndexes, nodeList, newIndex):
+        if len(nearNodeIndexes) == 0:
+            return None
+
+        for i in nearNodeIndexes:
+
+            dx = newNode.x - nodeList[i].x
+            dy = newNode.y - nodeList[i].y
+            dz = newNode.z - nodeList[i].z
             dxy = math.sqrt(dx ** 2 + dy ** 2)
             d = math.sqrt(dx ** 2 + dy ** 2 + dz ** 2)
             pitch = math.atan2(dz, dxy)
             theta = math.atan2(dy, dx)
 
             # check if the connection of near nodes with new node has collision
-            if not self.is_collision_after_connect(nearNode=self.nodeList[i], theta=theta, pitch=pitch, distance=d):
-                distanceList.append(self.nodeList[i].cost + d)
+            if self.is_collision_after_connect(nearNode=nodeList[i], theta=theta, pitch=pitch, distance=d):
+                continue
+            else:
+                cur_node = nodeList[i]
+                cur_distance = newNode.dis_to_start + self.dist_to_goal(newNode.x, newNode.y, newNode.z,
+                                                  cur_node.x, cur_node.y, cur_node.z)
+                # while cur_node.parentIndex is not None:
+                #     cur_parent = nodeList[cur_node.parentIndex]
+                #     cur_distance += self.dist_to_goal(cur_parent.x, cur_parent.y, cur_parent.z,
+                #                                       cur_node.x, cur_node.y, cur_node.z)
+                #     if cur_parent.parentIndex is None:
+                #         break;
+                #     cur_node = cur_parent
+
+                if cur_distance < cur_node.dis_to_start:
+                    nodeList[cur_node.parentIndex].isLeaf = True
+                    newNode.isLeaf = False
+                    cur_node.parentIndex = newIndex
+                    cur_node.dis_to_start = cur_distance
+
+
+    def choose_parent(self, newNode, nearNodesIndexes, nodeList):
+        if len(nearNodesIndexes) == 0:
+            return newNode
+        distanceList = []
+        for i in nearNodesIndexes:
+            if nodeList[i].parentIndex in nearNodesIndexes:
+                continue
+            dx = newNode.x - nodeList[i].x
+            dy = newNode.y - nodeList[i].y
+            dz = newNode.z - nodeList[i].z
+            dxy = math.sqrt(dx ** 2 + dy ** 2)
+            d = math.sqrt(dx ** 2 + dy ** 2 + dz ** 2)
+            pitch = math.atan2(dz, dxy)
+            theta = math.atan2(dy, dx)
+
+            # check if the connection of near nodes with new node has collision
+            if not self.is_collision_after_connect(nearNode=nodeList[i], theta=theta, pitch=pitch, distance=d):
+                distanceList.append(nodeList[i].cost + d)
             else:
                 distanceList.append(float("inf"))
 
@@ -114,15 +154,20 @@ class RRTStar:
             return newNode
         newNode.cost = min_cost
         newNode.parentIndex = nearNodesIndexes[distanceList.index(min_cost)]
+        newNode.dis_to_start = nodeList[newNode.parentIndex].dis_to_start + \
+                               self.dist_to_goal(newNode.x, newNode.y, newNode.z,
+                                                 nodeList[newNode.parentIndex].x,
+                                                 nodeList[newNode.parentIndex].y,
+                                                 nodeList[newNode.parentIndex].z)
         return newNode
 
-    def expand(self, randomNode, nearNodeIndex):
+    def expand(self, randomNode, nearNodeIndex, nodeList):
         """ Expand the tree at certain step from nearNode to randomNode
         :param randomNode: random node
         :param nearNodeIndex: index of the parent node
         :return:
         """
-        nearNode = self.nodeList[nearNodeIndex]
+        nearNode = nodeList[nearNodeIndex]
         dx = randomNode[0] - nearNode.x
         dy = randomNode[1] - nearNode.y
         dz = randomNode[2] - nearNode.z
@@ -138,30 +183,35 @@ class RRTStar:
         newNode.isLeaf = True
         return newNode
 
-    def final_path(self, goalIndex):
+    def final_path(self, startIndex, nodeList, nodeList_goal, goalIndex):
         path = [[self.goal.x, self.goal.y, self.goal.z]]
-        while self.nodeList[goalIndex].parentIndex is not None:
-            node = self.nodeList[goalIndex]
+        while nodeList[startIndex].parentIndex is not None:
+            node = nodeList[startIndex]
+            path.append([node.x, node.y, node.z])
+            startIndex = node.parentIndex
+        while nodeList_goal[goalIndex].parentIndex is not None:
+            node = nodeList[goalIndex]
             path.append([node.x, node.y, node.z])
             goalIndex = node.parentIndex
         path.append([self.start.x, self.start.y, self.start.z])
         return path
 
-    def get_best_last_index(self):
-        distances_to_goal = [(key, self.dist_to_goal(node.x, node.y, node.z)) for key, node in self.nodeList.items()]
-        nearGoalNodesIndexes = [key for key, distance in distances_to_goal if distance <= self.stepSize]
+    def get_best_last_index(self, nodeList, nodeList_goal):
+        distances_to_goal = [(key, key_goal, self.dist_to_goal(node.x, node.y, node.z, node_goal.x, node_goal.y, node_goal.z))
+                             for key_goal, node_goal in nodeList_goal.items()
+                             for key, node in nodeList.items()]
+
+        nearGoalNodesIndexes = [(key, key_goal) for key, key_goal, distance in distances_to_goal if distance <= self.stepSize]
 
         if len(nearGoalNodesIndexes) == 0:
             return None
-
-        min_cost = min([self.nodeList[key].cost for key in nearGoalNodesIndexes])
+        min_cost = min([nodeList[key].cost+nodeList_goal[key_goal].cost for key, key_goal in nearGoalNodesIndexes])
         for i in nearGoalNodesIndexes:
-            if self.nodeList[i].cost == min_cost:
-                print(min_cost)
+            if nodeList[i[0]].cost + nodeList[i[1]].cost == min_cost:
                 return i
         return None
 
-    def update_near_nodes(self, newNodeIndex, newNode, nearNodesIndexes):
+    def update_near_nodes(self, newNodeIndex, newNode, nearNodesIndexes, nodeList):
         """ Update the neighbourhood path
         :param newNodeIndex:
         :param newNode:
@@ -169,7 +219,7 @@ class RRTStar:
         :return:
         """
         for i in nearNodesIndexes:
-            nearNode = self.nodeList[i]
+            nearNode = nodeList[i]
             dx = newNode.x - nearNode.x
             dy = newNode.y - nearNode.y
             dz = newNode.z - nearNode.z
@@ -182,10 +232,10 @@ class RRTStar:
                 pitch = math.atan2(dz, dxy)
                 theta = math.atan2(dy, dx)
                 if not self.is_collision_after_connect(nearNode, theta, pitch, d):
-                    self.nodeList[nearNode.parentIndex].isLeaf = True
-                    for node in self.nodeList.values():
+                    nodeList[nearNode.parentIndex].isLeaf = True
+                    for node in nodeList.values():
                         if node.parentIndex == nearNode.parentIndex and node != nearNode:
-                            self.nodeList[nearNode.parentIndex].isLeaf = False
+                            nodeList[nearNode.parentIndex].isLeaf = False
                             break
                     # update
                     nearNode.parentIndex = newNodeIndex
@@ -193,7 +243,8 @@ class RRTStar:
                     newNode.isLeaf = False
                     # print('rewired: ' + str(nearNode.x) + ', ' + str(nearNode.y) + ', ' + str(nearNode.z))
 
-    def draw_graph(self, rnd=None):
+    def draw_graph(self,nodeList, nodeList_goal, rnd=None):
+
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
 
@@ -202,14 +253,26 @@ class RRTStar:
         #         pygame.draw.line(screen, (0, 255, 0),
         #                          [self.nodeList[node.parentIndex].x, self.nodeList[node.parentIndex].y],
         #                          [node.x, node.y])
-        for node in self.nodeList.values():
+        for node in nodeList.values():
             if node.parentIndex:
-                x_vals = [self.nodeList[node.parentIndex].x, node.x]
-                y_vals = [self.nodeList[node.parentIndex].y, node.y]
-                z_vals = [self.nodeList[node.parentIndex].z, node.z]
-                ax.plot(x_vals, y_vals, z_vals, c=(0, 1, 0))
+                x_vals = [nodeList[node.parentIndex].x, node.x]
+                y_vals = [nodeList[node.parentIndex].y, node.y]
+                z_vals = [nodeList[node.parentIndex].z, node.z]
+                ax.plot(x_vals, y_vals, z_vals, color=(0, 1, 0))
 
-        for node in self.nodeList.values():
+        for node in nodeList.values():
+            if node.isLeaf:
+                ax.scatter(node.x, node.y, node.z, marker='o', s=0.1, color=(1, 0, 1))
+                pass
+
+        for node in nodeList_goal.values():
+            if node.parentIndex:
+                x_vals = [nodeList_goal[node.parentIndex].x, node.x]
+                y_vals = [nodeList_goal[node.parentIndex].y, node.y]
+                z_vals = [nodeList_goal[node.parentIndex].z, node.z]
+                ax.plot(x_vals, y_vals, z_vals, color=(0, 1, 0))
+
+        for node in nodeList_goal.values():
             if node.isLeaf:
                 ax.scatter(node.x, node.y, node.z, marker='o', s=0.1, color=(1, 0, 1))
                 pass
@@ -227,9 +290,9 @@ class RRTStar:
             z_vals = r * np.cos(v) + z
             ax.plot_surface(x_vals, y_vals, z_vals, color=(0.5, 0.5, 0.5))
 
-        lastIndex = self.get_best_last_index()
+        lastIndex = self.get_best_last_index(nodeList, nodeList_goal)
         if lastIndex is not None:
-            path = self.final_path(lastIndex)
+            path = self.final_path(lastIndex[0], nodeList, nodeList_goal, lastIndex[1])
             # ind = len(path)
             # while ind > 1:
                 # pygame.draw.line(screen, (150, 150, 150), path[ind - 2], path[ind - 1], width=2)
@@ -250,31 +313,42 @@ class RRTStar:
         plt.show()
             # plt.close()
 
-    def run_RRT_Star(self, animation=True):
+    def run_IBRRT_Star(self, animation=True):
         self.nodeList[0] = self.start
+        self.nodeList_goal[0] = self.goal
         i = 0
         for i in range(self.maxIteration):
         # while True:
             i += 1
             rnd = self.get_random_point()
             nearNodeIndex = self.get_nearest_node_index(self.nodeList, rnd)
-            newNode = self.expand(rnd, nearNodeIndex)
+            newNode = self.expand(rnd, nearNodeIndex, self.nodeList)
             if not self.is_collision(newNode, self.obstacles):
-                nearNodesIndexes = self.find_near_nodes(newNode, 30)
-                newNode = self.choose_parent(newNode, nearNodesIndexes)
+                nearNodesIndexes = self.find_near_nodes(newNode, self.nodeList, 30)
+                newNode = self.choose_parent(newNode, nearNodesIndexes, self.nodeList)
                 self.nodeList[newNode.parentIndex].isLeaf = False
                 self.nodeList[i + 100] = newNode
-                self.update_near_nodes(i + 100, newNode, nearNodesIndexes)
-                if animation and i % 10 == 0:
-                    self.draw_graph(rnd)
-                # for e in pygame.event.get():
-                #     if e.type == pygame.QUIT or (e.type == pygame.KEYUP and e.key == pygame.K_ESCAPE):
-                #         sys.exit("Exiting")
-                # print(i)
-            lastIndex = self.get_best_last_index()
+                self.rewire(newNode, nearNodesIndexes, self.nodeList, i+100)
+                # if animation and i % 10 == 0:
+                #     self.draw_graph(self.nodeList, rnd)
+
+            rnd_goal = self.get_random_point()
+            nearNodeIndex_goal = self.get_nearest_node_index(self.nodeList_goal, rnd_goal)
+            newNode_goal= self.expand(rnd_goal, nearNodeIndex_goal, self.nodeList_goal)
+            if not self.is_collision(newNode_goal, self.obstacles):
+                nearNodesIndexes_goal = self.find_near_nodes(newNode_goal, self.nodeList_goal, 30)
+                newNode_goal = self.choose_parent(newNode_goal, nearNodesIndexes_goal, self.nodeList_goal)
+                self.nodeList_goal[newNode_goal.parentIndex].isLeaf = False
+                self.nodeList_goal[i + 100] = newNode_goal
+                self.rewire(newNode_goal, nearNodesIndexes_goal, self.nodeList_goal, i+100)
+
+            if animation and i % 10 == 0:
+                self.draw_graph(self.nodeList, self.nodeList_goal, rnd_goal)
+
+            lastIndex = self.get_best_last_index(self.nodeList, self.nodeList_goal)
             if lastIndex is None:
                 continue
-            path = self.final_path(lastIndex)
+            path = self.final_path(lastIndex[0], self.nodeList, self.nodeList_goal, lastIndex[1])
         return path
 
 
@@ -293,8 +367,8 @@ def main():
     # Set Initial parameters
     start = [250, 350, 0]
     goal = [250, -100, 300]
-    rrt = RRTStar(start=start, goal=goal, obstacles=obstacleList, stepSize=15, iteration=5000)
-    path = rrt.run_RRT_Star(animation=show_animation)
+    rrt = IBRRTStar(start=start, goal=goal, obstacles=obstacleList, stepSize=15, iteration=5000)
+    path = rrt.run_IBRRT_Star(animation=show_animation)
     # rrt.run_RRT_Star(animation=show_animation)
     # print(rrt.nodeList)
     print(path)

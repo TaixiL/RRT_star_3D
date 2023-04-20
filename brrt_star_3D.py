@@ -266,7 +266,7 @@ class BRRTStar:
             ax.set_zlabel('Z axis')
 
             # show the plot
-            plt.show()
+        plt.show()
             # plt.close()
 
     def run_RRT_Star(self, animation=True):
@@ -284,7 +284,7 @@ class BRRTStar:
                 newNode = self.choose_parent(newNode, nearNodesIndexes, self.nodeList)
                 self.nodeList[newNode.parentIndex].isLeaf = False
                 self.nodeList[i + 100] = newNode
-                self.update_near_nodes(i + 100, newNode, nearNodesIndexes, self.nodeList)
+                # self.update_near_nodes(i + 100, newNode, nearNodesIndexes, self.nodeList)
                 # if animation and i % 10 == 0:
                 #     self.draw_graph(self.nodeList, rnd)
 
@@ -296,7 +296,7 @@ class BRRTStar:
                 newNode_goal = self.choose_parent(newNode_goal, nearNodesIndexes_goal, self.nodeList_goal)
                 self.nodeList_goal[newNode_goal.parentIndex].isLeaf = False
                 self.nodeList_goal[i + 100] = newNode_goal
-                self.update_near_nodes(i + 100, newNode_goal, nearNodesIndexes_goal, self.nodeList_goal)
+                # self.update_near_nodes(i + 100, newNode_goal, nearNodesIndexes_goal, self.nodeList_goal)
             if animation and i % 10 == 0:
                 self.draw_graph(self.nodeList, self.nodeList_goal, rnd_goal)
 
