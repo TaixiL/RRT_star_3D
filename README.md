@@ -2,8 +2,8 @@
 
 ## Introduction
 
-This repository contains all the code we used to for benchmarking the algorithm we used for the course project.  
-
+This repository contains all the code we used to for benchmarking the algorithm we used for this project.  
+It also requires a conda environment to run our code.
 
 
 The following are the package we imported for these python program
