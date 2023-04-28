@@ -1,9 +1,9 @@
 import random
 import math
 import copy
-import sys
-import pygame
-import timeit
+# import sys
+# import pygame
+# import timeit
 import numpy as np
 
 show_animation = True
@@ -326,6 +326,7 @@ def main():
     # Set Initial parameters
     start = [250, 350, 0,0]
     goal = [100, 350, 10,300]
+
     rrt = RRTStar(start=start, goal=goal, obstacles=obstacleList, stepSize=15, iteration=3000)
     path = rrt.run_RRT_Star(animation=show_animation)
     # rrt.run_RRT_Star(animation=show_animation)
