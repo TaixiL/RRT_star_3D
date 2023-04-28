@@ -6,6 +6,18 @@ import pygame
 import timeit
 import numpy as np
 import matplotlib.pyplot as plt
+import panda3d
+from direct.showbase.ShowBase import ShowBase
+from panda3d.core import Point3
+from panda3d.core import LVector3
+from panda3d.core import PerspectiveLens
+from panda3d.core import AmbientLight, DirectionalLight
+from direct.task import Task
+from direct.actor.Actor import Actor
+from direct.interval.MetaInterval import Sequence
+from direct.interval.LerpInterval import LerpFunc
+from direct.interval.FunctionInterval import Func
+from direct.interval.ActorInterval import ActorInterval
 
 show_animation = True
 
@@ -60,7 +72,8 @@ class RRTStar:
 
     def find_near_nodes(self, newNode, r=8):
         dList = [(key, (node.x - newNode.x) ** 2 + (node.y - newNode.y) ** 2 + (node.z - newNode.z) ** 2) for key, node in self.nodeList.items()]
-        nearNodesIndexes = [key for key, distance in dList if distance <= r ** 2]
+        # nearNodesIndexes = [key for key, distance in dList if distance <= r ** 2]
+        nearNodesIndexes = [key for key, distance in dList]
         return nearNodesIndexes
 
     def get_nearest_node_index(self, nodeList, rnd):
@@ -260,13 +273,13 @@ class RRTStar:
             nearNodeIndex = self.get_nearest_node_index(self.nodeList, rnd)
             newNode = self.expand(rnd, nearNodeIndex)
             if not self.is_collision(newNode, self.obstacles):
-                nearNodesIndexes = self.find_near_nodes(newNode, 30)
-                newNode = self.choose_parent(newNode, nearNodesIndexes)
+                # nearNodesIndexes = self.find_near_nodes(newNode, 30)
+                # newNode = self.choose_parent(newNode, nearNodesIndexes)
                 self.nodeList[newNode.parentIndex].isLeaf = False
                 self.nodeList[i + 100] = newNode
-                self.update_near_nodes(i + 100, newNode, nearNodesIndexes)
-                if animation and i % 10 == 0:
-                    self.draw_graph(rnd)
+                # self.update_near_nodes(i + 100, newNode, nearNodesIndexes)
+                # if animation and i % 10 == 0:
+                #     self.draw_graph(rnd)
                 # for e in pygame.event.get():
                 #     if e.type == pygame.QUIT or (e.type == pygame.KEYUP and e.key == pygame.K_ESCAPE):
                 #         sys.exit("Exiting")
@@ -298,7 +311,7 @@ def main():
     # rrt.run_RRT_Star(animation=show_animation)
     # print(rrt.nodeList)
     print(path)
-    # rrt.draw_graph()
+    rrt.draw_graph()
     # if show_animation:
     #     # rrt.draw_graph()
     #     # ind = len(path)

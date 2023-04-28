@@ -31,9 +31,10 @@ class Node:
         self.parentIndex = None
         self.isLeaf = True
         self.cost = 0.0
+        self.dis_to_start = 0.0
 
 
-class BRRTStar:
+class IBRRTStar:
     def __init__(self, start, goal, obstacles, stepSize=5.0, iteration=500, goalRadius=10):
         """ RRT* initiation
         :param start: start position
@@ -91,11 +92,49 @@ class BRRTStar:
                 return True
         return False
 
+    def rewire(self, newNode, nearNodeIndexes, nodeList, newIndex):
+        if len(nearNodeIndexes) == 0:
+            return None
+
+        for i in nearNodeIndexes:
+
+            dx = newNode.x - nodeList[i].x
+            dy = newNode.y - nodeList[i].y
+            dz = newNode.z - nodeList[i].z
+            dxy = math.sqrt(dx ** 2 + dy ** 2)
+            d = math.sqrt(dx ** 2 + dy ** 2 + dz ** 2)
+            pitch = math.atan2(dz, dxy)
+            theta = math.atan2(dy, dx)
+
+            # check if the connection of near nodes with new node has collision
+            if self.is_collision_after_connect(nearNode=nodeList[i], theta=theta, pitch=pitch, distance=d):
+                continue
+            else:
+                cur_node = nodeList[i]
+                cur_distance = newNode.dis_to_start + self.dist_to_goal(newNode.x, newNode.y, newNode.z,
+                                                  cur_node.x, cur_node.y, cur_node.z)
+                # while cur_node.parentIndex is not None:
+                #     cur_parent = nodeList[cur_node.parentIndex]
+                #     cur_distance += self.dist_to_goal(cur_parent.x, cur_parent.y, cur_parent.z,
+                #                                       cur_node.x, cur_node.y, cur_node.z)
+                #     if cur_parent.parentIndex is None:
+                #         break;
+                #     cur_node = cur_parent
+
+                if cur_distance < cur_node.dis_to_start:
+                    nodeList[cur_node.parentIndex].isLeaf = True
+                    newNode.isLeaf = False
+                    cur_node.parentIndex = newIndex
+                    cur_node.dis_to_start = cur_distance
+
+
     def choose_parent(self, newNode, nearNodesIndexes, nodeList):
         if len(nearNodesIndexes) == 0:
             return newNode
         distanceList = []
         for i in nearNodesIndexes:
+            if nodeList[i].parentIndex in nearNodesIndexes:
+                continue
             dx = newNode.x - nodeList[i].x
             dy = newNode.y - nodeList[i].y
             dz = newNode.z - nodeList[i].z
@@ -115,6 +154,11 @@ class BRRTStar:
             return newNode
         newNode.cost = min_cost
         newNode.parentIndex = nearNodesIndexes[distanceList.index(min_cost)]
+        newNode.dis_to_start = nodeList[newNode.parentIndex].dis_to_start + \
+                               self.dist_to_goal(newNode.x, newNode.y, newNode.z,
+                                                 nodeList[newNode.parentIndex].x,
+                                                 nodeList[newNode.parentIndex].y,
+                                                 nodeList[newNode.parentIndex].z)
         return newNode
 
     def expand(self, randomNode, nearNodeIndex, nodeList):
@@ -266,10 +310,10 @@ class BRRTStar:
             ax.set_zlabel('Z axis')
 
             # show the plot
-            plt.show()
+        plt.show()
             # plt.close()
 
-    def run_RRT_Star(self, animation=True):
+    def run_IBRRT_Star(self, animation=True):
         self.nodeList[0] = self.start
         self.nodeList_goal[0] = self.goal
         i = 0
@@ -284,7 +328,7 @@ class BRRTStar:
                 newNode = self.choose_parent(newNode, nearNodesIndexes, self.nodeList)
                 self.nodeList[newNode.parentIndex].isLeaf = False
                 self.nodeList[i + 100] = newNode
-                self.update_near_nodes(i + 100, newNode, nearNodesIndexes, self.nodeList)
+                self.rewire(newNode, nearNodesIndexes, self.nodeList, i+100)
                 # if animation and i % 10 == 0:
                 #     self.draw_graph(self.nodeList, rnd)
 
@@ -296,7 +340,8 @@ class BRRTStar:
                 newNode_goal = self.choose_parent(newNode_goal, nearNodesIndexes_goal, self.nodeList_goal)
                 self.nodeList_goal[newNode_goal.parentIndex].isLeaf = False
                 self.nodeList_goal[i + 100] = newNode_goal
-                self.update_near_nodes(i + 100, newNode_goal, nearNodesIndexes_goal, self.nodeList_goal)
+                self.rewire(newNode_goal, nearNodesIndexes_goal, self.nodeList_goal, i+100)
+
             if animation and i % 10 == 0:
                 self.draw_graph(self.nodeList, self.nodeList_goal, rnd_goal)
 
@@ -322,8 +367,8 @@ def main():
     # Set Initial parameters
     start = [250, 350, 0]
     goal = [250, -100, 300]
-    rrt = BRRTStar(start=start, goal=goal, obstacles=obstacleList, stepSize=15, iteration=5000)
-    path = rrt.run_RRT_Star(animation=show_animation)
+    rrt = IBRRTStar(start=start, goal=goal, obstacles=obstacleList, stepSize=15, iteration=5000)
+    path = rrt.run_IBRRT_Star(animation=show_animation)
     # rrt.run_RRT_Star(animation=show_animation)
     # print(rrt.nodeList)
     print(path)
