@@ -1,4 +1,4 @@
-# Beyond RRT: Exploring Advanced Sampling-Based Methods for Path Planning  (COMP 781 Course project)
+# Beyond RRT: Exploring Advanced Sampling-Based Methods for Path Planning
 
 ## Introduction
 
