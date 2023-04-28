@@ -3,7 +3,12 @@
 ## Introduction
 
 This repository contains all the code we used to for benchmarking the algorithm we used for this project.  
-It also requires a conda environment to run our code.
+It also requires a ```conda``` environment to run our code.
+After ```conda``` is installed on your machine, run 
+ ```python
+ pip install pygame
+ ```
+ to install the required package.
 
 
 The following are the package we imported for these python program
